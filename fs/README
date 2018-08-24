@@ -1,0 +1,5 @@
+Usage:
+
+g++ -std=gnu++17 -O3 fs.cpp -o fs
+
+./fs data
