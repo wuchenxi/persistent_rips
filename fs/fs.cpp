@@ -69,14 +69,15 @@ int rank_features(std::vector<std::vector<double> > &d){
     std::sort(ds2.begin(), ds2.end(), cmp2);
     double sum=0;
     for(long i=0;i<ds1.size();i++){
-      sum+=fabs(ds1[i].dist-ds2[i].dist)>ds1.size()/5;
+      sum+=(ds1[i].dist>ds1.size()*0.8 && ds2[i].dist>ds1.size()*0.8)
+       +(ds1[i].dist<ds1.size()*0.2 && ds2[i].dist<ds1.size()*0.2);
     }
     //printf("%d, %lf\n", k, sum);
     eff[k]=sum;
   }
   int r=0;
   for(int i=1;i<n_f;i++)
-    if(eff[i]<eff[r])
+    if(eff[i]>eff[r])
       r=i;
   return r;
 }
