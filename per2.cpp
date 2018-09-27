@@ -10,7 +10,8 @@
 /***************Persistent Homology*************************/
 const int maxbd=3;
 const int maxdim=1;
-const int npts=100;
+const int npts=300;
+const double sharpness=0.4;
 typedef struct fc{int dim; int n; int bd[maxbd];} face;
 typedef struct col{int id; std::vector<int> bd;} column;
 typedef std::vector<face> cplx;
@@ -23,7 +24,7 @@ int init(cplx& X, mat& M, std::vector<double>& F, double high){
     if(F[i]<high)
       M.push_back({i, {}});
   }
-  std::sort(M.begin(), M.end(), [&F](col c1, col c2){return F[c1.id]<F[c2.id];});
+  std::sort(M.begin(), M.end(), [&F, &X](col& c1, col& c2){return F[c1.id]<F[c2.id] || (F[c1.id]==F[c2.id] && X[c1.id].dim<X[c2.id].dim);});
   std::vector<int> t(N);
   for(int i=0;i<M.size();i++){t[M[i].id]=i;}
   for(int i=0;i<M.size();i++){
@@ -86,13 +87,13 @@ int print_barcode(double high, double minlen, mat& M, cplx& X, std::vector<doubl
 	if(death-birth>=minlen){
 	  double curx=birth+death;
 	  double cury=death-birth;
-	  if(cury<0.1)cury=log(cury/0.1)+0.1;
+	  if(cury<0.05)cury=log(cury/0.05)+0.05;
 	  if(X[M[low].id].dim==0)
 	    for(int j=0;j<npts;j++)
-	      val_0[j]+=exp(-((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
+	      val_0[j]+=exp(-sharpness*((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
 	  else
 	    for(int j=0;j<npts;j++)
-	      val_1[j]+=exp(-((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
+	      val_1[j]+=exp(-sharpness*((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
 	}
       }
     }
@@ -102,16 +103,15 @@ int print_barcode(double high, double minlen, mat& M, cplx& X, std::vector<doubl
       double birth=F[M[i].id];
       double death=high;
       if(death-birth>=minlen){
-	
 	double curx=birth+death;
 	double cury=death-birth;
 	if(cury<0.1)cury=log(cury/0.1)+0.1;
 	if(X[M[i].id].dim==0)
 	  for(int j=0;j<npts;j++)
-	    val_0[j]+=exp(-((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
+	    val_0[j]+=exp(-sharpness*((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
 	else
 	  for(int j=0;j<npts;j++)
-	    val_1[j]+=exp(-((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
+	    val_1[j]+=exp(-sharpness*((x[j]-curx)*(x[j]-curx)+(y[j]-cury)*(y[j]-cury)));
       }
     }
   }
@@ -152,25 +152,6 @@ int PH1(double high, double minlen, cplx X, std::vector<double>& F,
 
 /******************************************************************************/
 
-int gengraph(int* G, cplx& X, std::vector<double>& F, int size){
-  int n=G[0];
-  int i=1;
-  int maxdg=0;
-  for(i; i<n+1; i++){
-    X.push_back({0, 0, {}});
-    F.push_back((double)G[i]);
-    if(G[i]>maxdg)maxdg=G[i];
-  }
-  for(int j=0;j<n;j++)
-    F[j]=1.0-F[j]/maxdg;
-  for(i;i<size;i+=2){
-    X.push_back({1, 2, {G[i], G[i+1]}});
-    F.push_back(std::max(F[G[i]], F[G[i+1]]));
-  }
-  return 0;
-}
-
-
 int gengraph2(int* G, cplx& X, std::vector<double>& F, std::vector<double>& W, int size){
   int n=G[0];
   int i=1;
@@ -180,13 +161,13 @@ int gengraph2(int* G, cplx& X, std::vector<double>& F, std::vector<double>& W, i
     X.push_back({0, 0, {}});
     F.push_back((double)G[i]);
     W.push_back(10);
-    if(G[i]>maxdg){maxdg=G[i];
-      center=i-1;
-    }
+    if(G[i]>maxdg)maxdg=G[i];
   }
-  for(int j=0;j<n;j++)
+  for(int j=0;j<n;j++){
     F[j]=1.0-F[j]/maxdg;
-  W[center]=0;
+    F[j]*=F[j];
+    if(F[j]<0.25)W[j]=0;
+  }
   for(i;i<size;i+=2){
     X.push_back({1, 2, {G[i], G[i+1]}});
     F.push_back(std::max(F[G[i]], F[G[i+1]]));
@@ -200,15 +181,18 @@ int gengraph2(int* G, cplx& X, std::vector<double>& F, std::vector<double>& W, i
     else if(W[b]>W[a]+1){W[b]=W[a]+1; flag++;}
   }
   }
-  for(int j=n;j<X.size();j++)
+  for(int j=0;j<n;j++)W[j]=1-1/W[j]/W[j];
+  for(int j=n;j<X.size();j++){
     W.push_back(std::max(W[X[j].bd[0]], W[X[j].bd[1]]));
+    //if(W[j]/5.0>F[j])printf("t %lf %lf\n", W[j]/5.0, F[j]);
+  }
   return 0;
 }
 
 int main(){
-  for(int i=0;i<npts;i++){
-    x[i]=((double)rand())/RAND_MAX*2;
-    y[i]=((double)rand())/RAND_MAX;
+  for(int i=0;i<300;i++){
+    x[i]=(i%20)*0.1;
+    y[i]=(i/20)*0.1-0.5;
   }
   clock_t t0=clock();
   FILE* input=fopen("reddit_5k", "r");
@@ -223,10 +207,9 @@ int main(){
     cplx X;
     std::vector<double> F;
     std::vector<double> W;
-    gengraph(gph+1, X, F, szgp-2);
     gengraph2(gph+1, X, F, W, szgp-2);
-    //PH0(1, 0.02, X, F);
-    PH1(1, 0.02, X, F, 0, 5, W);
+    //PH0(1, 0.01, X, F);
+    PH1(1, 0.01, X, F, 0, 1, W);
     printf("\n");
   }
   //printf("time: %lf\n", ((double)(clock()-t0))/CLOCKS_PER_SEC);

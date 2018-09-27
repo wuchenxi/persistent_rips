@@ -24,7 +24,7 @@ int init(cplx& X, mat& M, std::vector<double>& F, double high){
     if(F[i]<high)
       M.push_back({i, {}});
   }
-  std::sort(M.begin(), M.end(), [&F](col c1, col c2){return F[c1.id]<F[c2.id];});
+  std::sort(M.begin(), M.end(), [&F](col c1, col c2){return F[c1.id]<F[c2.id]  || (F[c1.id]==F[c2.id] && X[c1.id].dim<X[c2.id].dim);});
   std::vector<int> t(N);
   for(int i=0;i<M.size();i++){t[M[i].id]=i;}
   for(int i=0;i<M.size();i++){
